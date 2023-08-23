@@ -113,8 +113,8 @@ function main() {
         fi
     fi
 
-    # Check if cache file exists and is not older than 720 minutes
-    if [[ -f "$cache_file" && $(find "$cache_file" -mmin -720) ]]; then
+    # Check if cache file exists
+    if [[ -f "$cache_file" ]]; then
         version=$(awk -v ctx="$context" '$1 == ctx {print $2}' "$cache_file")
     fi
 
