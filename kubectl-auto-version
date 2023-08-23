@@ -1,0 +1,126 @@
+#!/bin/bash
+
+function get_context() {
+    # Check if --context was used
+    for word in "${@}"; do
+        if [[ ${word} =~ --context=?(.*) ]]; then
+            context_param=${BASH_REMATCH[1]}
+            echo $context_param
+            return
+        fi
+    done
+    # else, use current context
+    kubectl1.24 config current-context
+}
+
+function get_server_version() {
+    local version_info
+    version_info=$(kubectl1.24 version -o json --context="$1" 2>/dev/null)
+
+    if [[ $? -ne 0 || -z $version_info ]]; then
+        echo "Error: Failed to get Kubernetes server version. Ensure the server is reachable."
+        exit 1
+    fi
+
+    # Fetch major and minor versions from server
+    local version_major version_minor version
+    version_major=$(echo "$version_info" | jq -r '.serverVersion.major')
+    version_minor=$(echo "$version_info" | jq -r '.serverVersion.minor' | tr -d '+')
+
+    version="${version_major}.${version_minor}"
+    echo "$version"
+}
+
+function download_kubectl() {
+    local version architecture kubectl_dir kubectl_tmp_bin kubectl_bin
+    version=$1
+    architecture=$(uname -m)
+    kubectl_dir="/usr/local/bin"
+    kubectl_tmp_bin="/tmp/kubectl${version}"
+    kubectl_bin="${kubectl_dir}/kubectl${version}"
+
+    # Check if kubectl binary already exists
+    if [[ -f "${kubectl_bin}" ]]; then
+        echo "kubectl${version} is already installed."
+        return
+    fi
+
+    # Determine the architecture
+    case $architecture in
+    "x86_64")
+        architecture="amd64"
+        ;;
+    "arm64")
+        architecture="arm64"
+        ;;
+    *)
+        echo "Unsupported architecture: $architecture"
+        exit 1
+        ;;
+    esac
+
+    # Download kubectl
+    echo "Downloading kubectl version $version for $architecture architecture..."
+    # defaulting to the vX.Y.0, it's complicated to get the latest minor version without adding more network calls.
+    echo "Downloading from https://dl.k8s.io/release/v${version}.0/bin/darwin/${architecture}/kubectl"
+    if ! curl -L "https://dl.k8s.io/release/v${version}.0/bin/darwin/${architecture}/kubectl" -o "${kubectl_tmp_bin}"; then
+        echo "Error: Failed to download 'kubectl'."
+        return 1
+    fi
+
+    chmod +x "${kubectl_tmp_bin}"
+    mv "${kubectl_tmp_bin}" "${kubectl_bin}"
+    if [[ -e "${kubectl_bin}" ]]; then
+        echo "kubectl${version} is ready to use"
+    else
+        red=$(tput setaf 1)
+        green=$(tput setaf 2)
+        cyan=$(tput setaf 6)
+        reset=$(tput sgr0)
+        echo "${red}Error moving downloaded file."
+        echo "${green}Please run this as sudo and try again"
+        echo -e "${cyan}  sudo mv ${kubectl_tmp_bin} ${kubectl_bin}${reset}"
+        exit 1
+    fi
+}
+
+function main() {
+    local cache_file context version
+    cache_file="$HOME/.local/share/kubectl_version_cache"
+    context=$(get_context "${@}")
+
+    # For the first run, we need at least one downloaded kubectl binary to connect to the cluster
+    # Check if kubectl1.24 is downloaded
+    if [[ ! -f "/usr/local/bin/kubectl1.24" ]]; then
+        if download_kubectl "1.24"; then
+            echo "Error retrieving initial Kubernetes server version."
+            exit 1
+        fi
+    fi
+
+    # Check if cache file exists and is not older than 720 minutes
+    if [[ -f "$cache_file" && $(find "$cache_file" -mmin -720) ]]; then
+        version=$(awk -v ctx="$context" '$1 == ctx {print $2}' "$cache_file")
+    fi
+
+    # If version is blank (not found in cache file), fetch new version info
+    if [[ -z "$version" ]]; then
+        version=$(get_server_version "$context")
+        if [[ $? -ne 0 ]]; then
+            echo "Error retrieving Kubernetes server version."
+            exit 1
+        fi
+        echo "$context $version" >>"$cache_file"
+    fi
+
+    kubectl_bin="/usr/local/bin/kubectl${version}"
+
+    if [[ -f "${kubectl_bin}" ]]; then
+        "${kubectl_bin}" "${@}"
+    else
+        # download if the binary does not exist
+        download_kubectl "${version}" && "${kubectl_bin}" "${@}"
+    fi
+}
+
+main "$@"
