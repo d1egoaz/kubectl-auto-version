@@ -60,7 +60,7 @@ cd /path/to/kubectl-auto-version
 git pull
 ```
 
-## Process Flowchar
+## Process Flowchart
 
 Simplified version of the process.
 
@@ -79,3 +79,7 @@ graph TB;
     Check_Required_kubectl_bin -->|If exists| End[End];
     Download_Required_Kubectl --> End;
 ```
+
+## Demo
+
+https://github.com/d1egoaz/kubectl-auto-version/assets/950087/219b379d-44e8-43b3-a6cb-98c4c0c171ab

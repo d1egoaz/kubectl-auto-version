@@ -2,11 +2,26 @@
 
 function get_context() {
     # Check if --context was used
-    for word in "${@}"; do
-        if [[ ${word} =~ --context=?(.*) ]]; then
+    for ((i=1;i<=$#;i++)); do
+        if [ ${!i} = "--context" ] ; then
+            ((i++)) # next index
+            context_param="${!i}"
+            if [ -z "${context_param}" ]; then
+                echo "Error - The context parameter value wasn't provided."
+                return 1
+            else
+                echo "${context_param}"
+                return
+            fi
+        elif [[ ${!i} =~ --context=(.*) ]]; then
             context_param=${BASH_REMATCH[1]}
-            echo $context_param
-            return
+            if [ -z "${context_param}" ]; then
+                echo "Error - The context parameter value wasn't provided."
+                return 1
+            else
+                echo "${context_param}"
+                return
+            fi
         fi
     done
     # else, use current context
