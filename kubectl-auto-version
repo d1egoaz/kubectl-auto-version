@@ -32,9 +32,10 @@ function get_server_version() {
 }
 
 function download_kubectl() {
-    local version architecture kubectl_dir kubectl_tmp_bin kubectl_bin
+    local version architecture kubectl_dir kubectl_tmp_bin kubectl_bin os
     version=$1
     architecture=$(uname -m)
+    os=$(uname -s)
     kubectl_dir="/usr/local/bin"
     kubectl_tmp_bin="/tmp/kubectl${version}"
     kubectl_bin="${kubectl_dir}/kubectl${version}"
@@ -59,11 +60,25 @@ function download_kubectl() {
         ;;
     esac
 
+    # Determine the OS
+    case $os in
+    "Darwin")
+        os="darwin"
+        ;;
+    "Linux")
+        os="linux"
+        ;;
+    *)
+        echo "Unsupported OS: $os"
+        exit 1
+        ;;
+    esac
+
     # Download kubectl
     echo "Downloading kubectl version $version for $architecture architecture..."
     # defaulting to the vX.Y.0, it's complicated to get the latest minor version without adding more network calls.
-    echo "Downloading from https://dl.k8s.io/release/v${version}.0/bin/darwin/${architecture}/kubectl"
-    if ! curl -L "https://dl.k8s.io/release/v${version}.0/bin/darwin/${architecture}/kubectl" -o "${kubectl_tmp_bin}"; then
+    echo "Downloading from https://dl.k8s.io/release/v${version}.0/bin/${os}/${architecture}/kubectl"
+    if ! curl -L "https://dl.k8s.io/release/v${version}.0/bin/${os}/${architecture}/kubectl" -o "${kubectl_tmp_bin}"; then
         echo "Error: Failed to download 'kubectl'."
         return 1
     fi
